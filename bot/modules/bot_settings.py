@@ -231,6 +231,9 @@ def load_config():
     IGNORE_PENDING_REQUESTS = environ.get('IGNORE_PENDING_REQUESTS', '')
     IGNORE_PENDING_REQUESTS = IGNORE_PENDING_REQUESTS.lower() == 'true'
 
+    MEDIA_GROUP = environ.get('MEDIA_GROUP', '')
+    MEDIA_GROUP = MEDIA_GROUP.lower() == 'true'
+
     SERVER_PORT = environ.get('SERVER_PORT', '')
     SERVER_PORT = 80 if len(SERVER_PORT) == 0 else int(SERVER_PORT)
     BASE_URL = environ.get('BASE_URL', '').rstrip("/")
@@ -270,8 +273,6 @@ def load_config():
                 else:
                     INDEX_URLS.append('')
 
-    initiate_search_tools()
-
     config_dict.update({'AS_DOCUMENT': AS_DOCUMENT,
                         'AUTHORIZED_CHATS': AUTHORIZED_CHATS,
                         'AUTO_DELETE_MESSAGE_DURATION': AUTO_DELETE_MESSAGE_DURATION,
@@ -290,6 +291,7 @@ def load_config():
                         'IS_TEAM_DRIVE': IS_TEAM_DRIVE,
                         'LEECH_FILENAME_PREFIX': LEECH_FILENAME_PREFIX,
                         'LEECH_SPLIT_SIZE': LEECH_SPLIT_SIZE,
+                        'MEDIA_GROUP': MEDIA_GROUP,
                         'MEGA_API_KEY': MEGA_API_KEY,
                         'MEGA_EMAIL_ID': MEGA_EMAIL_ID,
                         'MEGA_PASSWORD': MEGA_PASSWORD,
@@ -323,6 +325,7 @@ def load_config():
 
     if DATABASE_URL:
         DbManger().update_config(config_dict)
+    initiate_search_tools()
     start_from_queued()
 
 def get_buttons(key=None, edit_type=None):
@@ -349,7 +352,7 @@ def get_buttons(key=None, edit_type=None):
     elif key == 'private':
         buttons.sbutton('Back', "botset back")
         buttons.sbutton('Close', "botset close")
-        msg = 'Send private file: config.env, token.pickle, accounts.zip, list_drives.txt, cookies.txt or .netrc.' \
+        msg = 'Send private file: config.env, token.pickle, accounts.zip, list_drives.txt, cookies.txt, terabox.txt or .netrc.' \
               '\nTo delete private file send the name of the file only as text message.\nTimeout: 60 sec'
     elif key == 'aria':
         for k in list(aria2_options.keys())[START:10+START]:
@@ -397,10 +400,7 @@ def get_buttons(key=None, edit_type=None):
         buttons.sbutton('Empty String', f"botset emptyqbit {key}")
         buttons.sbutton('Close', "botset close")
         msg = f'Send a valid value for {key}. Timeout: 60 sec'
-    if key is None:
-        button = buttons.build_menu(1)
-    else:
-        button = buttons.build_menu(2)
+    button = buttons.build_menu(1) if key is None else buttons.build_menu(2)
     return msg, button
 
 def update_buttons(message, key=None, edit_type=None):
@@ -449,8 +449,6 @@ def edit_variable(update, context, omsg, key):
         GLOBAL_EXTENSION_FILTER.append('.aria2')
         for x in fx:
             GLOBAL_EXTENSION_FILTER.append(x.strip().lower())
-    elif key in ['SEARCH_PLUGINS', 'SEARCH_API_LINK']:
-        initiate_search_tools()
     elif key == 'GDRIVE_ID':
         if DRIVES_NAMES and DRIVES_NAMES[0] == 'Main':
             DRIVES_IDS[0] = value
@@ -468,7 +466,9 @@ def edit_variable(update, context, omsg, key):
     update.message.delete()
     if DATABASE_URL:
         DbManger().update_config({key: value})
-    if key in ['QUEUE_ALL', 'QUEUE_DOWNLOAD', 'QUEUE_UPLOAD']:
+    if key in ['SEARCH_PLUGINS', 'SEARCH_API_LINK']:
+        initiate_search_tools()
+    elif key in ['QUEUE_ALL', 'QUEUE_DOWNLOAD', 'QUEUE_UPLOAD']:
         start_from_queued()
 
 def edit_aria(update, context, omsg, key):
@@ -654,7 +654,9 @@ def edit_bot_settings(update, context):
         update_buttons(message, 'var')
         if DATABASE_URL:
             DbManger().update_config({data[2]: value})
-        if data[2] in ['QUEUE_ALL', 'QUEUE_DOWNLOAD', 'QUEUE_UPLOAD']:
+        if data[2] in ['SEARCH_PLUGINS', 'SEARCH_API_LINK']:
+            initiate_search_tools()
+        elif data[2] in ['QUEUE_ALL', 'QUEUE_DOWNLOAD', 'QUEUE_UPLOAD']:
             start_from_queued()
     elif data[1] == 'resetaria':
         handler_dict[message.chat.id] = False
@@ -740,10 +742,8 @@ def edit_bot_settings(update, context):
         value = config_dict[data[2]]
         if len(str(value)) > 200:
             query.answer()
-            filename = f"{data[2]}.txt"
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f'{value}')
-            sendFile(context.bot, message, filename)
+            fileName = f"{data[2]}.txt"
+            sendFile(context.bot, message, value, fileName)
             return
         elif value == '':
             value = None
